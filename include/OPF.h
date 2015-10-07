@@ -18,6 +18,7 @@
 #include "subgraph.h"
 #include "sgctree.h"
 #include "realheap.h"
+#include "linearpq.h"
 
 /*--------- Common definitions --------- */
 #define opf_MAXARCW			100000.0

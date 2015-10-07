@@ -33,9 +33,9 @@ opf_ArcWeightFun opf_ArcWeight = opf_EuclDistLog;
 /*--------- Supervised OPF -------------------------------------*/
 //Training function -----
 void opf_OPFTraining(Subgraph *sg){
-    int p,q, i;
+    int p, q, sz, i;
     float tmp,weight;
-    RealHeap *Q = NULL;
+    LinearPQ *Q = NULL;
     float *pathval = NULL;
 
     // compute optimum prototypes
@@ -44,47 +44,43 @@ void opf_OPFTraining(Subgraph *sg){
     // initialization
     pathval = AllocFloatArray(sg->nnodes);
 
-    Q=CreateRealHeap(sg->nnodes, pathval);
+    Q = CreateLinearPQ(sg->nnodes, pathval);
 
     for (p = 0; p < sg->nnodes; p++) {
-        if (sg->node[p].status==opf_PROTOTYPE){
+        if (sg->node[p].status == opf_PROTOTYPE) {
             sg->node[p].pred   = NIL;
             pathval[p]         = 0;
             sg->node[p].label  = sg->node[p].truelabel;
-            InsertRealHeap(Q, p);
-        }else{ // non-prototypes
+        } else{ // non-prototypes
             pathval[p]  = FLT_MAX;
         }
     }
 
     // IFT with fmax
-    i=0;
-    while ( !IsEmptyRealHeap(Q) ) {
-        RemoveRealHeap(Q,&p);
+    sz = 0;
+    while (!IsEmptyLinearPQ(Q)) {
+        RemoveLinearPQ(Q, &p);
 
-        sg->ordered_list_of_nodes[i]=p; i++;
+        sg->ordered_list_of_nodes[sz++] = p;
         sg->node[p].pathval = pathval[p];
 
-        for (q=0; q < sg->nnodes; q++){
-            if (p!=q){
-                if (pathval[p] < pathval[q]){
-                    if(!opf_PrecomputedDistance)
-                        weight = opf_ArcWeight(sg->node[p].feat,sg->node[q].feat,sg->nfeats);
-                    else
-                        weight = opf_DistanceValue[sg->node[p].position][sg->node[q].position];
-                    tmp  = MAX(pathval[p],weight);
-                    if ( tmp < pathval[ q ] ) {
-                        sg->node[q].pred  = p;
-                        sg->node[q].label = sg->node[p].label;
-                        UpdateRealHeap(Q, q, tmp);
-                    }
-                }
+        for (i = Q->s; i < sg->nnodes; i++) {
+            q = Q->pixel[i];
+            if(!opf_PrecomputedDistance)
+                weight = opf_ArcWeight(sg->node[p].feat,sg->node[q].feat,sg->nfeats);
+            else
+                weight = opf_DistanceValue[sg->node[p].position][sg->node[q].position];
+            tmp = MAX(pathval[p], weight);
+            if (tmp < pathval[q]) {
+                sg->node[q].pred = p;
+                sg->node[q].label = sg->node[p].label;
+                pathval[q] = tmp;
             }
         }
     }
 
-    DestroyRealHeap( &Q );
-    free( pathval );
+    DestroyLinearPQ(&Q);
+    free(pathval);
 }
 
 //Classification function: it simply classifies samples from sg -----
@@ -650,64 +646,54 @@ void opf_NormalizeFeatures(Subgraph *sg){
 
 // Find prototypes by the MST approach
 void opf_MSTPrototypes(Subgraph *sg){
-    int p,q;
+    int p, q, i;
     float weight;
-    RealHeap *Q=NULL;
+    LinearPQ *Q = NULL;
     float *pathval = NULL;
     int  pred;
-    float nproto;
 
     // initialization
     pathval = AllocFloatArray(sg->nnodes);
-    Q = CreateRealHeap(sg->nnodes, pathval);
+    Q = CreateLinearPQ(sg->nnodes, pathval);
 
     for (p = 0; p < sg->nnodes; p++) {
-        pathval[ p ] = FLT_MAX;
-        sg->node[p].status=0;
+        pathval[p] = FLT_MAX;
+        sg->node[p].status = 0;
     }
 
-    pathval[0]  = 0;
+    pathval[0] = 0;
     sg->node[0].pred = NIL;
-    InsertRealHeap(Q, 0);
-
-    nproto=0.0;
 
     // Prim's algorithm for Minimum Spanning Tree
-    while ( !IsEmptyRealHeap(Q) ) {
-        RemoveRealHeap(Q,&p);
+    while (!IsEmptyLinearPQ(Q)) {
+        RemoveLinearPQ(Q, &p);
         sg->node[p].pathval = pathval[p];
 
-        pred=sg->node[p].pred;
-        if (pred!=NIL)
-        if (sg->node[p].truelabel != sg->node[pred].truelabel){
+        pred = sg->node[p].pred;
+        if (pred!=NIL && sg->node[p].truelabel != sg->node[pred].truelabel) {
             if (sg->node[p].status!=opf_PROTOTYPE){
                 sg->node[p].status=opf_PROTOTYPE;
-                nproto++;
             }
             if (sg->node[pred].status!=opf_PROTOTYPE){
                 sg->node[pred].status=opf_PROTOTYPE;
-                nproto++;
             }
         }
 
-        for (q=0; q < sg->nnodes; q++){
-            if (Q->color[q]!=BLACK){
-                if (p!=q){
-                    if(!opf_PrecomputedDistance)
-                        weight = opf_ArcWeight(sg->node[p].feat,sg->node[q].feat,sg->nfeats);
-                    else
-                        weight = opf_DistanceValue[sg->node[p].position][sg->node[q].position];
-                    if ( weight < pathval[ q ] ) {
-                        sg->node[q].pred = p;
-                        UpdateRealHeap(Q, q, weight);
-                    }
-                }
+        for (i = Q->s; i < sg->nnodes; i++) {
+            q = Q->pixel[i];
+            if(!opf_PrecomputedDistance)
+                weight = opf_ArcWeight(sg->node[p].feat,sg->node[q].feat,sg->nfeats);
+            else
+                weight = opf_DistanceValue[sg->node[p].position][sg->node[q].position];
+            if (weight < pathval[q]) {
+                pathval[q] = weight;
+                sg->node[q].pred = p;
             }
         }
     }
-    DestroyRealHeap(&Q);
-    free( pathval );
 
+    DestroyLinearPQ(&Q);
+    free(pathval);
 }
 
 //It creates k folds for cross validation

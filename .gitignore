@@ -7,3 +7,8 @@ tools/opf2txt
 tools/opf_check
 tools/statistics
 tools/txt2opf
+*.opf
+*.dat
+*.time
+*.out
+*.acc

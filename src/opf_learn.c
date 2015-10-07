@@ -52,6 +52,8 @@ int main(int argc, char **argv){
 	}
 	fprintf(stdout, " OK\n"); fflush(stdout);
 
+	fprintf(stdout, "\nLearning time: %f seconds\n", time); fflush(stdout);
+
 	sprintf(fileName,"%s.time",argv[1]);
 	f = fopen(fileName,"a");
 	fprintf(f,"%f\n",time);
