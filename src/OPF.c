@@ -24,6 +24,7 @@
   classifier.*/
 
 #include "OPF.h"
+#include "../include/util/subgraph.h"
 
 char	opf_PrecomputedDistance;
 float  **opf_DistanceValue;
@@ -33,9 +34,9 @@ opf_ArcWeightFun opf_ArcWeight = opf_EuclDistLog;
 /*--------- Supervised OPF -------------------------------------*/
 //Training function -----
 void opf_OPFTraining(Subgraph *sg){
-    int p, q, sz, i;
-    float tmp,weight;
-    LinearPQ *Q = NULL;
+    int p, q, nextP, sz;
+    float tmp, weight;
+    char *color;
     float *pathval = NULL;
 
     // compute optimum prototypes
@@ -43,44 +44,52 @@ void opf_OPFTraining(Subgraph *sg){
 
     // initialization
     pathval = AllocFloatArray(sg->nnodes);
-
-    Q = CreateLinearPQ(sg->nnodes, pathval);
+    color = (char *)malloc(sizeof(char) * sg->nnodes);
 
     for (p = 0; p < sg->nnodes; p++) {
+        color[p] = WHITE;
         if (sg->node[p].status == opf_PROTOTYPE) {
             sg->node[p].pred   = NIL;
             pathval[p]         = 0;
             sg->node[p].label  = sg->node[p].truelabel;
+            nextP = p;
         } else{ // non-prototypes
             pathval[p]  = FLT_MAX;
         }
     }
 
     // IFT with fmax
+    p = nextP;
     sz = 0;
-    while (!IsEmptyLinearPQ(Q)) {
-        RemoveLinearPQ(Q, &p);
-
+    while (p >= 0) {
+        color[p] = BLACK;
         sg->ordered_list_of_nodes[sz++] = p;
         sg->node[p].pathval = pathval[p];
 
-        for (i = Q->s; i < sg->nnodes; i++) {
-            q = Q->pixel[i];
-            if(!opf_PrecomputedDistance)
-                weight = opf_ArcWeight(sg->node[p].feat,sg->node[q].feat,sg->nfeats);
-            else
-                weight = opf_DistanceValue[sg->node[p].position][sg->node[q].position];
-            tmp = MAX(pathval[p], weight);
-            if (tmp < pathval[q]) {
-                sg->node[q].pred = p;
-                sg->node[q].label = sg->node[p].label;
-                pathval[q] = tmp;
+        nextP = -1;
+        for (q = 0; q < sg->nnodes; q++)
+            if (color[q] != BLACK) {
+                if (pathval[p] < pathval[q]) {
+                    if (!opf_PrecomputedDistance)
+                        weight = opf_ArcWeight(sg->node[p].feat, sg->node[q].feat, sg->nfeats);
+                    else
+                        weight = opf_DistanceValue[sg->node[p].position][sg->node[q].position];
+                    tmp = MAX(pathval[p], weight);
+                    if (tmp < pathval[q]) {
+                        sg->node[q].pred = p;
+                        sg->node[q].label = sg->node[p].label;
+                        pathval[q] = tmp;
+                    }
+                }
+                if (nextP == -1 || pathval[q] < pathval[nextP])
+                    nextP = q;
             }
-        }
+
+        p = nextP;
     }
 
-    DestroyLinearPQ(&Q);
     free(pathval);
+    free(color);
 }
 
 //Classification function: it simply classifies samples from sg -----
@@ -646,17 +655,18 @@ void opf_NormalizeFeatures(Subgraph *sg){
 
 // Find prototypes by the MST approach
 void opf_MSTPrototypes(Subgraph *sg){
-    int p, q, i;
+    int p, q, nextP;
     float weight;
-    LinearPQ *Q = NULL;
+    char *color;
     float *pathval = NULL;
     int  pred;
 
     // initialization
     pathval = AllocFloatArray(sg->nnodes);
-    Q = CreateLinearPQ(sg->nnodes, pathval);
+    color = (char *)malloc(sizeof(char) * sg->nnodes);
 
     for (p = 0; p < sg->nnodes; p++) {
+        color[p] = WHITE;
         pathval[p] = FLT_MAX;
         sg->node[p].status = 0;
     }
@@ -665,8 +675,9 @@ void opf_MSTPrototypes(Subgraph *sg){
     sg->node[0].pred = NIL;
 
     // Prim's algorithm for Minimum Spanning Tree
-    while (!IsEmptyLinearPQ(Q)) {
-        RemoveLinearPQ(Q, &p);
+    p = 0;
+    while (p >= 0) {
+        color[p] = BLACK;
         sg->node[p].pathval = pathval[p];
 
         pred = sg->node[p].pred;
@@ -679,21 +690,28 @@ void opf_MSTPrototypes(Subgraph *sg){
             }
         }
 
-        for (i = Q->s; i < sg->nnodes; i++) {
-            q = Q->pixel[i];
-            if(!opf_PrecomputedDistance)
-                weight = opf_ArcWeight(sg->node[p].feat,sg->node[q].feat,sg->nfeats);
-            else
-                weight = opf_DistanceValue[sg->node[p].position][sg->node[q].position];
-            if (weight < pathval[q]) {
-                pathval[q] = weight;
-                sg->node[q].pred = p;
+        nextP = -1;
+        for (q = 0; q < sg->nnodes; q++)
+            if (color[q] != BLACK) {
+                if (pathval[p] < pathval[q]) {
+                    if (!opf_PrecomputedDistance)
+                        weight = opf_ArcWeight(sg->node[p].feat, sg->node[q].feat, sg->nfeats);
+                    else
+                        weight = opf_DistanceValue[sg->node[p].position][sg->node[q].position];
+                    if (weight < pathval[q]) {
+                        pathval[q] = weight;
+                        sg->node[q].pred = p;
+                    }
+                }
+                if (nextP == -1 || pathval[q] < pathval[nextP])
+                    nextP = q;
             }
-        }
+
+        p = nextP;
     }
 
-    DestroyLinearPQ(&Q);
     free(pathval);
+    free(color);
 }
 
 //It creates k folds for cross validation

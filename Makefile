@@ -27,7 +27,6 @@ $(OBJ)/gqueue.o \
 $(OBJ)/realheap.o \
 $(OBJ)/sgctree.o \
 $(OBJ)/subgraph.o \
-$(OBJ)/linearpq.o \
 $(OBJ)/OPF.o \
 
 $(OBJ)/OPF.o: $(SRC)/OPF.c
@@ -83,14 +82,13 @@ opf_normalize: libOPF
 	$(CC) $(FLAGS) $(INCFLAGS) src/opf_normalize.c  -L./lib -o bin/opf_normalize -lOPF -lm
 
 
-util: $(SRC)/$(UTIL)/common.c $(SRC)/$(UTIL)/set.c $(SRC)/$(UTIL)/gqueue.c $(SRC)/$(UTIL)/realheap.c $(SRC)/$(UTIL)/sgctree.c $(SRC)/$(UTIL)/subgraph.c $(SRC)/$(UTIL)/linearpq.c
+util: $(SRC)/$(UTIL)/common.c $(SRC)/$(UTIL)/set.c $(SRC)/$(UTIL)/gqueue.c $(SRC)/$(UTIL)/realheap.c $(SRC)/$(UTIL)/sgctree.c $(SRC)/$(UTIL)/subgraph.c
 	$(CC) $(FLAGS) $(INCFLAGS) -c $(SRC)/$(UTIL)/common.c -o $(OBJ)/common.o
 	$(CC) $(FLAGS) $(INCFLAGS) -c $(SRC)/$(UTIL)/set.c -o $(OBJ)/set.o
 	$(CC) $(FLAGS) $(INCFLAGS) -c $(SRC)/$(UTIL)/gqueue.c -o $(OBJ)/gqueue.o
 	$(CC) $(FLAGS) $(INCFLAGS) -c $(SRC)/$(UTIL)/realheap.c -o $(OBJ)/realheap.o
 	$(CC) $(FLAGS) $(INCFLAGS) -c $(SRC)/$(UTIL)/sgctree.c -o $(OBJ)/sgctree.o
 	$(CC) $(FLAGS) $(INCFLAGS) -c $(SRC)/$(UTIL)/subgraph.c -o $(OBJ)/subgraph.o
-	$(CC) $(FLAGS) $(INCFLAGS) -c $(SRC)/$(UTIL)/linearpq.c -o $(OBJ)/linearpq.o
 
 
 ## Compiling LibOPF with LibIFT
