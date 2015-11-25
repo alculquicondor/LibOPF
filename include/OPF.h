@@ -11,6 +11,7 @@
 #include <assert.h>
 #include <sys/time.h>
 #include <ctype.h>
+#include <omp.h>
 
 #include "common.h"
 #include "set.h"
