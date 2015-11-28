@@ -69,13 +69,11 @@ void opf_OPFTraining(Subgraph *sg){
     {
         thread_id = omp_get_thread_num();
         while (p >= 0) {
-# pragma omp master
-            {
+            if (thread_id == 0) {
                 color[p] = BLACK;
                 sg->ordered_list_of_nodes[sz++] = p;
                 sg->node[p].pathval = pathval[p];
             }
-
 
             nextP[thread_id] = -1;
 # pragma omp barrier
@@ -99,11 +97,10 @@ void opf_OPFTraining(Subgraph *sg){
                 }
             }
 
-# pragma omp master
-            {
+            if (thread_id == 0) {
                 p = nextP[0];
                 for (q = 1; q < threads; q++)
-                    if (p == -1 || (nextP[q] != -1 && pathval[nextP[q]] < pathval[p]))
+                    if (nextP[q] != -1 && (p == -1 || pathval[nextP[q]] < pathval[p]))
                         p = nextP[q];
             }
 # pragma omp barrier
@@ -701,14 +698,13 @@ void opf_MSTPrototypes(Subgraph *sg){
     // Prim's algorithm for Minimum Spanning Tree
     p = 0;
 # pragma omp parallel \
-        private(q, thread_id, weight, opf_DistanceValue) \
-        shared(p, sg, nextP, color, pathval, opf_PrecomputedDistance, threads, opf_ArcWeight, pred) \
+        private(q, thread_id, weight, opf_DistanceValue, pred) \
+        shared(p, sg, nextP, color, pathval, opf_PrecomputedDistance, threads, opf_ArcWeight) \
         default(none)
     {
         thread_id = omp_get_thread_num();
         while (p >= 0) {
-# pragma omp master
-            {
+            if (thread_id == 0) {
                 color[p] = BLACK;
                 sg->node[p].pathval = pathval[p];
 
@@ -742,11 +738,10 @@ void opf_MSTPrototypes(Subgraph *sg){
                         nextP[thread_id] = q;
                 }
 
-# pragma omp master
-            {
+            if (thread_id == 0) {
                 p = nextP[0];
                 for (q = 1; q < threads; q++)
-                    if (p == -1 || (nextP[q] != -1 && pathval[nextP[q]] < pathval[p]))
+                    if (nextP[q] != -1 && (p == -1 || pathval[nextP[q]] < pathval[p]))
                         p = nextP[q];
             }
 # pragma omp barrier

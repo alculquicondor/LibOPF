@@ -6,7 +6,7 @@ UTIL=util
 
 CC=gcc
 
-FLAGS=  -O2 -Wall -fopenmp
+FLAGS=  -O3 -Wall -fopenmp
 
 
 INCFLAGS = -I$(INCLUDE) -I$(INCLUDE)/$(UTIL)
