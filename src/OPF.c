@@ -118,6 +118,10 @@ void opf_OPFClassifying(Subgraph *sgtrain, Subgraph *sg)
     int i, j, k, l, label = -1;
     float tmp, weight, minCost;
 
+# pragma omp parallel for \
+        private(i, j, k, l, label, tmp, weight, minCost) \
+        shared(sgtrain, sg, opf_PrecomputedDistance, opf_DistanceValue, opf_ArcWeight) \
+        default(none)
     for (i = 0; i < sg->nnodes; i++)
     {
         j       = 0;
