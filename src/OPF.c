@@ -34,11 +34,11 @@ opf_ArcWeightFun opf_ArcWeight = opf_EuclDistLog;
 /*--------- Supervised OPF -------------------------------------*/
 //Training function -----
 void opf_OPFTraining(Subgraph *sg){
-    int p, q, sz, threads = omp_get_max_threads(), thread_id;
+    int p, q, sz, threads = omp_get_max_threads();
     float tmp, weight;
     char *color;
     float *pathval = NULL;
-    int *nextP = (int *)malloc(sizeof(int) * threads);
+    int nextP;
 
     // compute optimum prototypes
     opf_MSTPrototypes(sg);
@@ -53,29 +53,29 @@ void opf_OPFTraining(Subgraph *sg){
             sg->node[p].pred   = NIL;
             pathval[p]         = 0;
             sg->node[p].label  = sg->node[p].truelabel;
-            nextP[0] = p;
+            nextP = p;
         } else{ // non-prototypes
             pathval[p]  = FLT_MAX;
         }
     }
 
     // IFT with fmax
-    p = nextP[0];
+    p = nextP;
     sz = 0;
 # pragma omp parallel \
-        private(q, thread_id, tmp, weight, opf_DistanceValue) \
-        shared(p, sg, nextP, color, sz, pathval, opf_PrecomputedDistance, threads, opf_ArcWeight) \
+        private(q, nextP, tmp, weight, opf_DistanceValue) \
+        shared(p, sg, color, sz, pathval, opf_PrecomputedDistance, threads, opf_ArcWeight) \
         default(none)
     {
-        thread_id = omp_get_thread_num();
         while (p >= 0) {
-            if (thread_id == 0) {
+# pragma omp master
+            {
                 color[p] = BLACK;
                 sg->ordered_list_of_nodes[sz++] = p;
                 sg->node[p].pathval = pathval[p];
             }
 
-            nextP[thread_id] = -1;
+            nextP = -1;
 # pragma omp barrier
 # pragma omp for
             for (q = 0; q < sg->nnodes; q++) {
@@ -92,22 +92,26 @@ void opf_OPFTraining(Subgraph *sg){
                             pathval[q] = tmp;
                         }
                     }
-                    if (nextP[thread_id] == -1 || pathval[q] < pathval[nextP[thread_id]])
-                        nextP[thread_id] = q;
+                    if (nextP == -1 || pathval[q] < pathval[nextP])
+                        nextP = q;
                 }
             }
 
-            if (thread_id == 0) {
-                p = nextP[0];
-                for (q = 1; q < threads; q++)
-                    if (nextP[q] != -1 && (p == -1 || pathval[nextP[q]] < pathval[p]))
-                        p = nextP[q];
+# pragma omp master
+            p = -1;
+# pragma omp barrier
+
+            if (nextP != -1)
+# pragma omp critical
+            {
+                if (p == -1 || pathval[nextP] < pathval[p])
+                    p = nextP;
             }
+
 # pragma omp barrier
         }
     }
 
-    free(nextP);
     free(pathval);
     free(color);
 }
