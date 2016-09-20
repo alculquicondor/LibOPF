@@ -34,11 +34,11 @@ opf_ArcWeightFun opf_ArcWeight = opf_EuclDistLog;
 /*--------- Supervised OPF -------------------------------------*/
 //Training function -----
 void opf_OPFTraining(Subgraph *sg){
-    int p, q, sz, threads = omp_get_max_threads();
+    int p, q, sz, threads = omp_get_max_threads(), threadId;
     float tmp, weight;
     char *color;
     float *pathval = NULL;
-    int nextP;
+    int *nextP = (int *)malloc(sizeof(int) * threads);
 
     // compute optimum prototypes
     opf_MSTPrototypes(sg);
@@ -53,30 +53,27 @@ void opf_OPFTraining(Subgraph *sg){
             sg->node[p].pred   = NIL;
             pathval[p]         = 0;
             sg->node[p].label  = sg->node[p].truelabel;
-            nextP = p;
+            nextP[0] = p;
         } else{ // non-prototypes
             pathval[p]  = FLT_MAX;
         }
     }
 
     // IFT with fmax
-    p = nextP;
+    p = nextP[0];
     sz = 0;
+    color[p] = BLACK;
+    sg->ordered_list_of_nodes[sz++] = p;
+    sg->node[p].pathval = pathval[p];
 # pragma omp parallel \
-        private(q, nextP, tmp, weight, opf_DistanceValue) \
-        shared(p, sg, color, sz, pathval, opf_PrecomputedDistance, threads, opf_ArcWeight) \
+        private(q, tmp, weight, opf_DistanceValue, threadId) \
+        shared(p, nextP, sg, color, sz, pathval, opf_PrecomputedDistance, threads, opf_ArcWeight) \
         default(none)
     {
+        threadId = omp_get_thread_num();
         while (p >= 0) {
-# pragma omp master
-            {
-                color[p] = BLACK;
-                sg->ordered_list_of_nodes[sz++] = p;
-                sg->node[p].pathval = pathval[p];
-            }
 
-            nextP = -1;
-# pragma omp barrier
+            nextP[threadId] = -1;
 # pragma omp for
             for (q = 0; q < sg->nnodes; q++) {
                 if (color[q] != BLACK) {
@@ -92,26 +89,31 @@ void opf_OPFTraining(Subgraph *sg){
                             pathval[q] = tmp;
                         }
                     }
-                    if (nextP == -1 || pathval[q] < pathval[nextP])
-                        nextP = q;
+                    if (nextP[threadId] == -1 || pathval[q] < pathval[nextP[threadId]])
+                        nextP[threadId] = q;
                 }
             }
 
 # pragma omp master
-            p = -1;
-# pragma omp barrier
-
-            if (nextP != -1)
-# pragma omp critical
             {
-                if (p == -1 || pathval[nextP] < pathval[p])
-                    p = nextP;
+                p = nextP[0];
+                for (q = 1; q < threads; ++q)
+                    if (nextP[q] != -1 && (p == -1 || pathval[nextP[q]] < pathval[p]))
+                        p = nextP[q];
+                if (p != -1) {
+                    color[p] = BLACK;
+                    sg->ordered_list_of_nodes[sz++] = p;
+                    sg->node[p].pathval = pathval[p];
+                }
             }
 
 # pragma omp barrier
         }
     }
 
+    printf("%d\n", sz);
+
+    free(nextP);
     free(pathval);
     free(color);
 }
@@ -683,7 +685,7 @@ void opf_NormalizeFeatures(Subgraph *sg){
 
 // Find prototypes by the MST approach
 void opf_MSTPrototypes(Subgraph *sg){
-    int p, q, threads = omp_get_max_threads(), thread_id;
+    int q, p, threads = omp_get_max_threads(), threadId;
     float weight;
     char *color;
     float *pathval = NULL;
@@ -705,30 +707,17 @@ void opf_MSTPrototypes(Subgraph *sg){
 
     // Prim's algorithm for Minimum Spanning Tree
     p = 0;
+    color[p] = BLACK;
+    sg->node[p].pathval = pathval[p];
 # pragma omp parallel \
-        private(q, thread_id, weight, opf_DistanceValue, pred) \
+        private(q, threadId, weight, opf_DistanceValue, pred) \
         shared(p, sg, nextP, color, pathval, opf_PrecomputedDistance, threads, opf_ArcWeight) \
         default(none)
     {
-        thread_id = omp_get_thread_num();
+        threadId = omp_get_thread_num();
         while (p >= 0) {
-            if (thread_id == 0) {
-                color[p] = BLACK;
-                sg->node[p].pathval = pathval[p];
 
-                pred = sg->node[p].pred;
-                if (pred != NIL && sg->node[p].truelabel != sg->node[pred].truelabel) {
-                    if (sg->node[p].status != opf_PROTOTYPE) {
-                        sg->node[p].status = opf_PROTOTYPE;
-                    }
-                    if (sg->node[pred].status != opf_PROTOTYPE) {
-                        sg->node[pred].status = opf_PROTOTYPE;
-                    }
-                }
-            }
-
-            nextP[thread_id] = -1;
-# pragma omp barrier
+            nextP[threadId] = -1;
 # pragma omp for
             for (q = 0; q < sg->nnodes; q++)
                 if (color[q] != BLACK) {
@@ -742,20 +731,32 @@ void opf_MSTPrototypes(Subgraph *sg){
                             sg->node[q].pred = p;
                         }
                     }
-                    if (nextP[thread_id] == -1 || pathval[q] < pathval[nextP[thread_id]])
-                        nextP[thread_id] = q;
+                    if (nextP[threadId] == -1 || pathval[q] < pathval[nextP[threadId]])
+                        nextP[threadId] = q;
                 }
 
-            if (thread_id == 0) {
+# pragma omp master
+            {
                 p = nextP[0];
                 for (q = 1; q < threads; q++)
                     if (nextP[q] != -1 && (p == -1 || pathval[nextP[q]] < pathval[p]))
                         p = nextP[q];
+                if (p != -1) {
+                    color[p] = BLACK;
+                    sg->node[p].pathval = pathval[p];
+
+                    pred = sg->node[p].pred;
+                    if (pred != NIL && sg->node[p].truelabel != sg->node[pred].truelabel) {
+                        sg->node[p].status = opf_PROTOTYPE;
+                        sg->node[pred].status = opf_PROTOTYPE;
+                    }
+                }
             }
 # pragma omp barrier
         }
     }
 
+    free(nextP);
     free(pathval);
     free(color);
 }
