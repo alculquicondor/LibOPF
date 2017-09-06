@@ -56,11 +56,8 @@ void Warning(char *msg,char *func){ /* It prints warning message and
 }
 
 
-void Change(int *a, int *b){ /* It changes content between a and b */
-  const int c = *a;
-  *a = *b;
-  *b = c;
-}
+void Change(int *a, int *b); /* It changes content between a and b */
+
 
 /*
  * Generates a random number within [low,high].
