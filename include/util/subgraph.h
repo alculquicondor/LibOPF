@@ -11,7 +11,6 @@ typedef struct _snode {
     float radius;   // maximum distance among the k-nearest neighbors in
     // the training set. It is used to propagate
     // clustering labels to testing nodes)
-    float dcost;  // cost used for indexing on OPFTree (volatile value)
 
     int   label;   //node label
     int   root;    //root node

@@ -1765,75 +1765,65 @@ float opf_NormalizedCutToKmax( Subgraph *sg )
 }
 
 
-OPFTree *opf_IndexTrainedSubgraph(Subgraph *sgtrain) {
+OPFTree *opf_IndexTrainedSubgraph(const Subgraph *sgtrain) {
     OPFTree *tree = CreateOPFTree(sgtrain->nnodes);
-    TNode *node = GetNewOPFTreeNode(tree);
-    node->sgnode = &sgtrain->node[sgtrain->ordered_list_of_nodes[0]];
-    if (sgtrain->nnodes == 1)
-        return tree;
-    SNode **nodes = (SNode **)calloc(sgtrain->nnodes - 1, sizeof(SNode *));
-    for (int i = 1; i < sgtrain->nnodes; ++i) {
-        nodes[i] = &sgtrain->node[sgtrain->ordered_list_of_nodes[i]];
+    for (int i = 0; i < sgtrain->nnodes; ++i) {
+        tree->nodes[i].sgnode = &sgtrain->node[sgtrain->ordered_list_of_nodes[i]];
     }
-    opf_IndexTrainedSubgraphHelper(sgtrain, tree, node, nodes, sgtrain->nnodes - 1);
-    free(nodes);
+    if (sgtrain->nnodes > 1)
+        opf_IndexTrainedSubgraphHelper(sgtrain, tree->nodes, sgtrain->nnodes - 1);
     return tree;
 }
 
-void opf_IndexTrainedSubgraphHelper(Subgraph *sg, OPFTree *tree, TNode *tnode, SNode **sgnodes, int nnodes) {
-    // Get delta cost for remaining nodes
+void opf_IndexTrainedSubgraphHelper(const Subgraph *sg, TNode *nodes, int nnodes) {
+    TNode *curr_node = &nodes[0];
+    // Get delta dcost for remaining nodes
     int i;
-    for (i = 0; i < nnodes; ++i) {
+    for (i = 1; i < nnodes; ++i) {
         float dist;
-        if(!opf_PrecomputedDistance)
-            dist = opf_ArcWeight(tnode->sgnode->feat, sgnodes[i]->feat, sg->nfeats);
+        if (!opf_PrecomputedDistance)
+            dist = opf_ArcWeight(curr_node->sgnode->feat, nodes[i].sgnode->feat, sg->nfeats);
         else
-            dist = opf_DistanceValue[tnode->sgnode->position][sgnodes[i]->position];
-        sgnodes[i]->dcost = MAX(dist, sgnodes[i]->pathval);
+            dist = opf_DistanceValue[curr_node->sgnode->position][nodes[i].sgnode->position];
+        nodes[i].dcost = MAX(dist, nodes[i].sgnode->pathval);
     }
 
-    qsort((void *)sgnodes, nnodes, sizeof(SNode *), opf_OPFTreeCompare);
-    tnode->median = sgnodes[(nnodes - 1) / 2]->dcost;
+    qsort((void *)(nodes + 1), nnodes - 1, sizeof(SNode *), opf_OPFTreeCompare);
+    curr_node->dcost = nodes[1 + (nnodes - 2) / 2].dcost;  // Getting median cost.
 
-    SNode **parent_node = &sgnodes[0];
-    int left_nodes = 1;
-    for (; left_nodes < nnodes && sgnodes[left_nodes]->dcost <= tnode->median; ++left_nodes) {
-        if (sgnodes[left_nodes]->pathval < (*parent_node)->pathval)
-            parent_node = &sgnodes[left_nodes];
-    }
-    if (parent_node != &sgnodes[0]) {  // swap to first position
-        SNode *tmp = sgnodes[0];
-        sgnodes[0] = *parent_node;
-        *parent_node = tmp;
-    }
-    TNode *lnode = GetNewOPFTreeNode(tree);
-    lnode->sgnode = sgnodes[0];
-    if (left_nodes - 1 > 0) {
-        opf_IndexTrainedSubgraphHelper(sg, tree, lnode, sgnodes + 1, left_nodes - 1);
-    }
+    TNode *best_node;
 
-    if (left_nodes == nnodes) {  // No nodes remaining for right child
-        return;
+    // Search parent node for left subtree.
+    best_node = &nodes[1];
+    int median_div = 2;
+    for (; median_div < nnodes && nodes[median_div].dcost <= nodes[0].dcost; ++median_div) {
+        if (nodes[median_div].sgnode->pathval < best_node->sgnode->pathval)
+            best_node = &nodes[median_div];
     }
-    parent_node = &sgnodes[left_nodes];
-    for (i = left_nodes + 1; i < nnodes; ++i) {
-        if (sgnodes[i]->pathval < (*parent_node)->pathval)
-            parent_node = &sgnodes[i];
+    if (best_node != &nodes[1])
+        SwapTNode(&nodes[1], best_node);
+    if (median_div > 2)
+        opf_IndexTrainedSubgraphHelper(sg, nodes + 2, median_div - 2);
+    curr_node->lchild = &nodes[1];
+
+    if (median_div == nnodes)
+        return;  // No remaining nodes for the right child.
+
+    // Search parent node for right subtree.
+    best_node = &nodes[median_div];
+    for (i = median_div + 1; i < nnodes; ++i) {
+        if (nodes[i].sgnode->pathval < best_node->sgnode->pathval)
+            best_node = &nodes[i];
     }
-    if (parent_node != &sgnodes[left_nodes]) {  // swap to first position
-        SNode *tmp = sgnodes[left_nodes];
-        sgnodes[left_nodes] = *parent_node;
-        *parent_node = tmp;
-    }
-    TNode *rnode = GetNewOPFTreeNode(tree);
-    rnode->sgnode = sgnodes[left_nodes];
-    if (nnodes - left_nodes - 1 > 0) {
-        opf_IndexTrainedSubgraphHelper(sg, tree, rnode, sgnodes + left_nodes + 1, nnodes - left_nodes - 1);
-    }
+    if (best_node != &nodes[median_div])
+        SwapTNode(&nodes[median_div], best_node);
+    if (nnodes - median_div > 1)
+        opf_IndexTrainedSubgraphHelper(sg, nodes + median_div + 1, nnodes - median_div - 1);
+    curr_node->rchild = &nodes[median_div];
 }
 
 int opf_OPFTreeCompare(const void *a, const void *b) {
-    float diff = (*(SNode **)a)->dcost - (*(SNode **)b)->dcost;
+    float diff = ((TNode *)a)->dcost - ((TNode *)b)->dcost;
     if (diff < 0)
         return -1;
     if (diff > 0)

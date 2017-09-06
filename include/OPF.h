@@ -95,8 +95,8 @@ float opf_NormalizedCutToKmax( Subgraph *sg ); //Normalized cut computed only fo
 
 
 /* -------- Auxiliary functions to index a subgraph for classification ------*/
-OPFTree *opf_IndexTrainedSubgraph(Subgraph *sgtrain);  // Builds an OPF tree from trained subgraph
-void opf_IndexTrainedSubgraphHelper(Subgraph *sg, OPFTree *tree, TNode *tnode, SNode **sgnodes, int nnodes);
+OPFTree *opf_IndexTrainedSubgraph(const Subgraph *sgtrain);  // Builds an OPF tree from trained subgraph
+void opf_IndexTrainedSubgraphHelper(const Subgraph *sg, TNode *nodes, int nnodes);
 int opf_OPFTreeCompare(const void *a, const void *b);
 
 #endif

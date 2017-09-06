@@ -5,7 +5,7 @@
 
 typedef struct _tnode {
     SNode *sgnode;
-    float median;
+    float dcost;  // median cost
     struct _tnode *lchild;
     struct _tnode *rchild;
 } TNode;
@@ -13,8 +13,7 @@ typedef struct _tnode {
 
 typedef struct _opftree {
     TNode *nodes;
-    int _used_nodes;
-    int _capacity;
+    int nnodes;
 } OPFTree;
 
 
@@ -22,6 +21,6 @@ typedef struct _opftree {
 OPFTree *CreateOPFTree(int nnodes);  // Allocates nodes for the tree
 void DestroyOPFTree(OPFTree **tree);  // Deallocates memoery for opftree
 
-TNode *GetNewOPFTreeNode(OPFTree *tree);  // Gets a new node from allocated nodes
+void SwapTNode(TNode *a, TNode *b);  // Swap nodes
 
 #endif //_OPFTREE_H

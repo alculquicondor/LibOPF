@@ -12,8 +12,7 @@ OPFTree *CreateOPFTree(int nnodes) {
         Error("Cannot allocate nodes", "CreateOPFTree");
     }
 
-    tree->_used_nodes = 0;
-    tree->_capacity = nnodes;
+    tree->nnodes = nnodes;
 }
 
 
@@ -23,10 +22,8 @@ void DestroyOPFTree(OPFTree **tree) {
     *tree = NULL;
 }
 
-
-TNode *GetNewOPFTreeNode(OPFTree *tree) {
-    if (tree->_used_nodes == tree->_capacity) {
-        Error("No more available nodes", "GetNewOPFTreeNode");
-    }
-    return &tree->nodes[tree->_used_nodes++];
+void SwapTNode(TNode *a, TNode *b) {
+    TNode tmp = *a;
+    *a = *b;
+    *b = tmp;
 }
