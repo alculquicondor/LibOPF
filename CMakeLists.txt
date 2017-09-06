@@ -9,13 +9,23 @@ include_directories(include include/util)
 link_libraries(m)
 
 set(SOURCE_FILES
-    src/OPF.c
-    src/util/common.c
-    src/util/gqueue.c
-    src/util/realheap.c
-    src/util/set.c
-    src/util/sgctree.c
-    src/util/subgraph.c)
+        src/OPF.c
+        src/util/common.c
+        src/util/gqueue.c
+        src/util/opftree.c
+        src/util/realheap.c
+        src/util/set.c
+        src/util/sgctree.c
+        src/util/subgraph.c
+
+        include/OPF.h
+        include/util/common.h
+        include/util/gqueue.h
+        include/util/opftree.h
+        include/util/realheap.h
+        include/util/set.h
+        include/util/sgctree.h
+        include/util/subgraph.h)
 
 add_executable(opf_distance ${SOURCE_FILES} src/opf_distance.c)
 add_executable(opf_split ${SOURCE_FILES} src/opf_split.c)

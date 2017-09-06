@@ -14,8 +14,9 @@
 #include <omp.h>
 
 #include "common.h"
-#include "set.h"
 #include "gqueue.h"
+#include "opftree.h"
+#include "set.h"
 #include "subgraph.h"
 #include "sgctree.h"
 #include "realheap.h"
@@ -91,4 +92,11 @@ float* opf_CreateArcs2(Subgraph *sg, int kmax); //Creates arcs for each node (ad
 void opf_OPFClusteringToKmax(Subgraph *sg); //OPFClustering computation only for sg->bestk neighbors
 void opf_PDFtoKmax(Subgraph *sg); //PDF computation only for sg->bestk neighbors
 float opf_NormalizedCutToKmax( Subgraph *sg ); //Normalized cut computed only for sg->bestk neighbors
+
+
+/* -------- Auxiliary functions to index a subgraph for classification ------*/
+OPFTree *opf_IndexTrainedSubgraph(Subgraph *sgtrain);  // Builds an OPF tree from trained subgraph
+void opf_IndexTrainedSubgraphHelper(Subgraph *sg, OPFTree *tree, TNode *tnode, SNode **sgnodes, int nnodes);
+int opf_OPFTreeCompare(const void *a, const void *b);
+
 #endif

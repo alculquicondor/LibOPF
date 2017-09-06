@@ -6,27 +6,29 @@
 
 /*--------- Data types ----------------------------- */
 typedef struct _snode {
-  float pathval; //path value
-  float dens;    //node density
-  float radius;   // maximum distance among the k-nearest neighbors in
-		  // the training set. It is used to propagate
-		  // clustering labels to testing nodes)
-  int   label;   //node label
-  int   root;    //root node
-  int   pred;    //predecessor node
-  int   truelabel; //true label if it is known
-  int   position;  //index in the feature space
-  float *feat;    //feature vector
-  char  status;  //0 - nothing, 1 - prototype
-  char  relevant; //0 - irrelevant, 1 - relevant
+    float pathval; //path value
+    float dens;    //node density
+    float radius;   // maximum distance among the k-nearest neighbors in
+    // the training set. It is used to propagate
+    // clustering labels to testing nodes)
+    float dcost;  // cost used for indexing on OPFTree (volatile value)
 
-  int nplatadj; //holds the amount of adjacent nodes on plateaus
-                //It is used to optimize opf_BestkMinCut
-                //because a knn graph need only be built
-                //for kmax, but the opf_PDF and opf_NormalizedCut computation
-                //need only be done for the current k,
-                //or until k+nplatadj is reached.
-  Set   *adj;    //adjacency list for knn graphs
+    int   label;   //node label
+    int   root;    //root node
+    int   pred;    //predecessor node
+    int   truelabel; //true label if it is known
+    int   position;  //index in the feature space
+    float *feat;    //feature vector
+    char  status;  //0 - nothing, 1 - prototype
+    char  relevant; //0 - irrelevant, 1 - relevant
+
+    int nplatadj; //holds the amount of adjacent nodes on plateaus
+    //It is used to optimize opf_BestkMinCut
+    //because a knn graph need only be built
+    //for kmax, but the opf_PDF and opf_NormalizedCut computation
+    //need only be done for the current k,
+    //or until k+nplatadj is reached.
+    Set   *adj;    //adjacency list for knn graphs
 } SNode;
 
 typedef struct _subgraph {
