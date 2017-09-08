@@ -3,7 +3,7 @@ project(LibOPF_al)
 
 find_package(OpenMP)
 
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS} -Wall")
 
 include_directories(include include/util)
 link_libraries(m)
