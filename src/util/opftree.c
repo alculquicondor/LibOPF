@@ -7,12 +7,13 @@ OPFTree *CreateOPFTree(int nnodes) {
         Error("Cannot allocate tree", "CreateOPFTree");
     }
 
-    tree->nodes = (TNode *)calloc(nnodes, sizeof(OPFTree));
-    if (tree->nodes) {
+    tree->nodes = (TNode *)calloc(nnodes, sizeof(TNode));
+    if (tree->nodes == NULL) {
         Error("Cannot allocate nodes", "CreateOPFTree");
     }
 
     tree->nnodes = nnodes;
+    return tree;
 }
 
 

@@ -94,9 +94,7 @@ void opf_PDFtoKmax(Subgraph *sg); //PDF computation only for sg->bestk neighbors
 float opf_NormalizedCutToKmax( Subgraph *sg ); //Normalized cut computed only for sg->bestk neighbors
 
 
-/* -------- Auxiliary functions to index a subgraph for classification ------*/
+/* -------- Auxiliary function to index a subgraph for classification ------*/
 OPFTree *opf_IndexTrainedSubgraph(const Subgraph *sgtrain);  // Builds an OPF tree from trained subgraph
-void opf_IndexTrainedSubgraphHelper(const Subgraph *sg, TNode *nodes, int nnodes);
-int opf_OPFTreeCompare(const void *a, const void *b);
 
 #endif

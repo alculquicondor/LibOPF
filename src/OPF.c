@@ -111,53 +111,46 @@ void opf_OPFTraining(Subgraph *sg){
         }
     }
 
-    printf("%d\n", sz);
-
     free(nextP);
     free(pathval);
     free(color);
 }
 
+
+void kOPFClassifyingHelper(Subgraph *sg, SNode *node, const TNode *tnode) {
+    if (node->pathval <= tnode->sgnode->pathval)
+        return;
+    float dcost;
+    if (!opf_PrecomputedDistance)
+        dcost = opf_ArcWeight(node->feat, tnode->sgnode->feat, sg->nfeats);
+    else
+        dcost = opf_DistanceValue[node->position][tnode->sgnode->position];
+    dcost = MAX(dcost, tnode->sgnode->pathval);
+    if (dcost < node->pathval) {
+        node->pathval = dcost;
+        node->label = tnode->sgnode->label;
+    }
+    if (tnode->lchild && dcost - node->pathval < tnode->dcost)
+        kOPFClassifyingHelper(sg, node, tnode->lchild);
+    if (tnode->rchild && dcost + node->pathval > tnode->dcost)
+        kOPFClassifyingHelper(sg, node, tnode->rchild);
+}
+
 //Classification function: it simply classifies samples from sg -----
 void opf_OPFClassifying(Subgraph *sgtrain, Subgraph *sg)
 {
-    int i, j, k, l, label = -1;
-    float tmp, weight, minCost;
+    int i;
+    OPFTree *tree = opf_IndexTrainedSubgraph(sgtrain);
 
 # pragma omp parallel for \
-        private(i, j, k, l, label, tmp, weight, minCost) \
-        shared(sgtrain, sg, opf_PrecomputedDistance, opf_DistanceValue, opf_ArcWeight) \
+        private(i) \
+        shared(sgtrain, sg, opf_PrecomputedDistance, opf_DistanceValue, opf_ArcWeight, tree) \
         default(none)
-    for (i = 0; i < sg->nnodes; i++)
-    {
-        j       = 0;
-        k       = sgtrain->ordered_list_of_nodes[j];
-        if(!opf_PrecomputedDistance)
-            weight = opf_ArcWeight(sgtrain->node[k].feat,sg->node[i].feat,sg->nfeats);
-        else
-            weight = opf_DistanceValue[sgtrain->node[k].position][sg->node[i].position];
-
-        minCost = MAX(sgtrain->node[k].pathval, weight);
-        label   = sgtrain->node[k].label;
-
-        while((j < sgtrain->nnodes-1)&&
-              (minCost > sgtrain->node[sgtrain->ordered_list_of_nodes[j+1]].pathval)){
-
-            l  = sgtrain->ordered_list_of_nodes[j+1];
-
-            if(!opf_PrecomputedDistance)
-                weight = opf_ArcWeight(sgtrain->node[l].feat,sg->node[i].feat,sg->nfeats);
-            else
-                weight = opf_DistanceValue[sgtrain->node[l].position][sg->node[i].position];
-            tmp = MAX(sgtrain->node[l].pathval, weight);
-            if(tmp < minCost){
-                minCost = tmp;
-                label = sgtrain->node[l].label;
-            }
-            j++;
-        }
-        sg->node[i].label = label;
+    for (i = 0; i < sg->nnodes; i++) {
+        kOPFClassifyingHelper(sg, &sg->node[i], tree->nodes);
     }
+
+    DestroyOPFTree(&tree);
 }
 
 // Semi-supervised learning function
@@ -1765,17 +1758,14 @@ float opf_NormalizedCutToKmax( Subgraph *sg )
 }
 
 
-OPFTree *opf_IndexTrainedSubgraph(const Subgraph *sgtrain) {
-    OPFTree *tree = CreateOPFTree(sgtrain->nnodes);
-    for (int i = 0; i < sgtrain->nnodes; ++i) {
-        tree->nodes[i].sgnode = &sgtrain->node[sgtrain->ordered_list_of_nodes[i]];
-    }
-    if (sgtrain->nnodes > 1)
-        opf_IndexTrainedSubgraphHelper(sgtrain, tree->nodes, sgtrain->nnodes - 1);
-    return tree;
+int kOPFTreeCompare(const void *a, const void *b) {
+    float v1 = ((const TNode *)a)->dcost;
+    float v2 = ((const TNode *)b)->dcost;
+    return v1 < v2 ? -1 : v1 > v2;
 }
 
-void opf_IndexTrainedSubgraphHelper(const Subgraph *sg, TNode *nodes, int nnodes) {
+
+void kIndexTrainedSubgraphHelper(const Subgraph *sg, TNode *nodes, int nnodes) {
     TNode *curr_node = &nodes[0];
     // Get delta dcost for remaining nodes
     int i;
@@ -1788,7 +1778,7 @@ void opf_IndexTrainedSubgraphHelper(const Subgraph *sg, TNode *nodes, int nnodes
         nodes[i].dcost = MAX(dist, nodes[i].sgnode->pathval);
     }
 
-    qsort((void *)(nodes + 1), nnodes - 1, sizeof(SNode *), opf_OPFTreeCompare);
+    qsort((void *)(nodes + 1), nnodes - 1, sizeof(TNode), kOPFTreeCompare);
     curr_node->dcost = nodes[1 + (nnodes - 2) / 2].dcost;  // Getting median cost.
 
     TNode *best_node;
@@ -1803,7 +1793,7 @@ void opf_IndexTrainedSubgraphHelper(const Subgraph *sg, TNode *nodes, int nnodes
     if (best_node != &nodes[1])
         SwapTNode(&nodes[1], best_node);
     if (median_div > 2)
-        opf_IndexTrainedSubgraphHelper(sg, nodes + 2, median_div - 2);
+        kIndexTrainedSubgraphHelper(sg, nodes + 1, median_div - 1);
     curr_node->lchild = &nodes[1];
 
     if (median_div == nnodes)
@@ -1817,16 +1807,18 @@ void opf_IndexTrainedSubgraphHelper(const Subgraph *sg, TNode *nodes, int nnodes
     }
     if (best_node != &nodes[median_div])
         SwapTNode(&nodes[median_div], best_node);
-    if (nnodes - median_div > 1)
-        opf_IndexTrainedSubgraphHelper(sg, nodes + median_div + 1, nnodes - median_div - 1);
+    if (nnodes - median_div > 2)
+        kIndexTrainedSubgraphHelper(sg, nodes + median_div, nnodes - median_div);
     curr_node->rchild = &nodes[median_div];
 }
 
-int opf_OPFTreeCompare(const void *a, const void *b) {
-    float diff = ((TNode *)a)->dcost - ((TNode *)b)->dcost;
-    if (diff < 0)
-        return -1;
-    if (diff > 0)
-        return 1;
-    return 0;
+
+OPFTree *opf_IndexTrainedSubgraph(const Subgraph *sgtrain) {
+    OPFTree *tree = CreateOPFTree(sgtrain->nnodes);
+    for (int i = 0; i < sgtrain->nnodes; ++i) {
+        tree->nodes[i].sgnode = &sgtrain->node[sgtrain->ordered_list_of_nodes[i]];
+    }
+    if (sgtrain->nnodes > 1)
+        kIndexTrainedSubgraphHelper(sgtrain, tree->nodes, sgtrain->nnodes);
+    return tree;
 }
