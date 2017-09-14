@@ -117,12 +117,14 @@ void opf_OPFTraining(Subgraph *sg){
 }
 
 
-int kOPFClassifyingHelper(Subgraph *sg, SNode *node, const OPFTree *tree, TNode **node_stack) {
+int kOPFClassifyingHelper(Subgraph *sg, SNode *node, const OPFTree *tree, RealHeap *heap) {
     int calculations = 0;
-    int stack_size = 0;
-    node_stack[stack_size++] = tree->nodes;
-    while (stack_size > 0) {
-        TNode *tnode = node_stack[--stack_size];
+    int node_id;
+    heap->last = -1;
+    InsertRealHeap(heap, 0);
+    while (!IsEmptyRealHeap(heap)) {
+        RemoveRealHeap(heap, &node_id);
+        TNode *tnode = &tree->nodes[node_id];
         if (node->pathval <= tnode->sgnode->pathval)
             continue;
         calculations++;
@@ -137,9 +139,9 @@ int kOPFClassifyingHelper(Subgraph *sg, SNode *node, const OPFTree *tree, TNode 
             node->label = tnode->sgnode->label;
         }
         if (tnode->lchild && dcost - node->pathval < tnode->dcost)
-            node_stack[stack_size++] = tnode->lchild;
+            InsertRealHeap(heap, tnode->lchild - tree->nodes);
         if (tnode->rchild && dcost + node->pathval > tnode->dcost)
-            node_stack[stack_size++] = tnode->rchild;
+            InsertRealHeap(heap, tnode->rchild - tree->nodes);
     }
     return calculations;
 }
@@ -149,21 +151,29 @@ void opf_OPFClassifying(Subgraph *sgtrain, Subgraph *sg)
 {
     int i;
     OPFTree *tree = opf_IndexTrainedSubgraph(sgtrain);
-    TNode **node_stack;
+
+    float *heap_costs = AllocFloatArray(tree->nnodes);
+    for (int i = 0; i < tree->nnodes; ++i) {
+        heap_costs[i] = tree->nodes[i].sgnode->pathval;
+    }
+
+    RealHeap *heap;
+
 # pragma omp parallel \
-        private(i, node_stack) \
-        shared(sgtrain, sg, opf_PrecomputedDistance, opf_DistanceValue, opf_ArcWeight, tree) \
+        private(i, heap) \
+        shared(sgtrain, sg, opf_PrecomputedDistance, opf_DistanceValue, opf_ArcWeight, tree, heap_costs) \
         default(none)
     {
-        node_stack = (TNode **)calloc(sizeof(TNode *), sg->nnodes);
+        heap = CreateRealHeap(tree->nnodes, heap_costs);
 # pragma omp for
         for (i = 0; i < sg->nnodes; i++) {
             sg->node[i].pathval = INFINITY;
-            kOPFClassifyingHelper(sg, &sg->node[i], tree, node_stack);
+            int d = kOPFClassifyingHelper(sg, &sg->node[i], tree, heap);
         }
-        free(node_stack);
+        DestroyRealHeap(&heap);
     }
 
+    free(heap_costs);
     DestroyOPFTree(&tree);
 }
 
