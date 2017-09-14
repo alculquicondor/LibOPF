@@ -117,24 +117,30 @@ void opf_OPFTraining(Subgraph *sg){
 }
 
 
-int kOPFClassifyingHelper(Subgraph *sg, SNode *node, const TNode *tnode) {
-    if (node->pathval <= tnode->sgnode->pathval)
-        return 0;
-    float dcost;
-    if (!opf_PrecomputedDistance)
-        dcost = opf_ArcWeight(node->feat, tnode->sgnode->feat, sg->nfeats);
-    else
-        dcost = opf_DistanceValue[node->position][tnode->sgnode->position];
-    dcost = MAX(dcost, tnode->sgnode->pathval);
-    if (dcost < node->pathval) {
-        node->pathval = dcost;
-        node->label = tnode->sgnode->label;
+int kOPFClassifyingHelper(Subgraph *sg, SNode *node, const OPFTree *tree, TNode **node_stack) {
+    int calculations = 0;
+    int stack_size = 0;
+    node_stack[stack_size++] = tree->nodes;
+    while (stack_size > 0) {
+        TNode *tnode = node_stack[--stack_size];
+        if (node->pathval <= tnode->sgnode->pathval)
+            continue;
+        calculations++;
+        float dcost;
+        if (!opf_PrecomputedDistance)
+            dcost = opf_ArcWeight(node->feat, tnode->sgnode->feat, sg->nfeats);
+        else
+            dcost = opf_DistanceValue[node->position][tnode->sgnode->position];
+        dcost = MAX(dcost, tnode->sgnode->pathval);
+        if (dcost < node->pathval) {
+            node->pathval = dcost;
+            node->label = tnode->sgnode->label;
+        }
+        if (tnode->lchild && dcost - node->pathval < tnode->dcost)
+            node_stack[stack_size++] = tnode->lchild;
+        if (tnode->rchild && dcost + node->pathval > tnode->dcost)
+            node_stack[stack_size++] = tnode->rchild;
     }
-    int calculations = 1;
-    if (tnode->lchild && dcost - node->pathval < tnode->dcost)
-        calculations += kOPFClassifyingHelper(sg, node, tnode->lchild);
-    if (tnode->rchild && dcost + node->pathval > tnode->dcost)
-        calculations += kOPFClassifyingHelper(sg, node, tnode->rchild);
     return calculations;
 }
 
@@ -143,13 +149,19 @@ void opf_OPFClassifying(Subgraph *sgtrain, Subgraph *sg)
 {
     int i;
     OPFTree *tree = opf_IndexTrainedSubgraph(sgtrain);
-# pragma omp parallel for \
-        private(i) \
+    TNode **node_stack;
+# pragma omp parallel \
+        private(i, node_stack) \
         shared(sgtrain, sg, opf_PrecomputedDistance, opf_DistanceValue, opf_ArcWeight, tree) \
         default(none)
-    for (i = 0; i < sg->nnodes; i++) {
-        sg->node[i].pathval = INFINITY;
-        kOPFClassifyingHelper(sg, &sg->node[i], tree->nodes);
+    {
+        node_stack = (TNode **)calloc(sizeof(TNode *), sg->nnodes);
+# pragma omp for
+        for (i = 0; i < sg->nnodes; i++) {
+            sg->node[i].pathval = INFINITY;
+            kOPFClassifyingHelper(sg, &sg->node[i], tree, node_stack);
+        }
+        free(node_stack);
     }
 
     DestroyOPFTree(&tree);
