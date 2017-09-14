@@ -117,9 +117,9 @@ void opf_OPFTraining(Subgraph *sg){
 }
 
 
-void kOPFClassifyingHelper(Subgraph *sg, SNode *node, const TNode *tnode) {
+int kOPFClassifyingHelper(Subgraph *sg, SNode *node, const TNode *tnode) {
     if (node->pathval <= tnode->sgnode->pathval)
-        return;
+        return 0;
     float dcost;
     if (!opf_PrecomputedDistance)
         dcost = opf_ArcWeight(node->feat, tnode->sgnode->feat, sg->nfeats);
@@ -130,10 +130,12 @@ void kOPFClassifyingHelper(Subgraph *sg, SNode *node, const TNode *tnode) {
         node->pathval = dcost;
         node->label = tnode->sgnode->label;
     }
+    int calculations = 1;
     if (tnode->lchild && dcost - node->pathval < tnode->dcost)
-        kOPFClassifyingHelper(sg, node, tnode->lchild);
+        calculations += kOPFClassifyingHelper(sg, node, tnode->lchild);
     if (tnode->rchild && dcost + node->pathval > tnode->dcost)
-        kOPFClassifyingHelper(sg, node, tnode->rchild);
+        calculations += kOPFClassifyingHelper(sg, node, tnode->rchild);
+    return calculations;
 }
 
 //Classification function: it simply classifies samples from sg -----
@@ -141,12 +143,12 @@ void opf_OPFClassifying(Subgraph *sgtrain, Subgraph *sg)
 {
     int i;
     OPFTree *tree = opf_IndexTrainedSubgraph(sgtrain);
-
 # pragma omp parallel for \
         private(i) \
         shared(sgtrain, sg, opf_PrecomputedDistance, opf_DistanceValue, opf_ArcWeight, tree) \
         default(none)
     for (i = 0; i < sg->nnodes; i++) {
+        sg->node[i].pathval = INFINITY;
         kOPFClassifyingHelper(sg, &sg->node[i], tree->nodes);
     }
 
@@ -1785,8 +1787,8 @@ void kIndexTrainedSubgraphHelper(const Subgraph *sg, TNode *nodes, int nnodes) {
 
     // Search parent node for left subtree.
     best_node = &nodes[1];
-    int median_div = 2;
-    for (; median_div < nnodes && nodes[median_div].dcost <= nodes[0].dcost; ++median_div) {
+    int median_div;
+    for (median_div = 2; median_div < nnodes && nodes[median_div].dcost <= curr_node->dcost; ++median_div) {
         if (nodes[median_div].sgnode->pathval < best_node->sgnode->pathval)
             best_node = &nodes[median_div];
     }
@@ -1807,7 +1809,7 @@ void kIndexTrainedSubgraphHelper(const Subgraph *sg, TNode *nodes, int nnodes) {
     }
     if (best_node != &nodes[median_div])
         SwapTNode(&nodes[median_div], best_node);
-    if (nnodes - median_div > 2)
+    if (nnodes - median_div > 1)
         kIndexTrainedSubgraphHelper(sg, nodes + median_div, nnodes - median_div);
     curr_node->rchild = &nodes[median_div];
 }
