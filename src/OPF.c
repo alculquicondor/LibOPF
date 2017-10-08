@@ -158,10 +158,11 @@ void opf_OPFClassifying(Subgraph *sgtrain, Subgraph *sg)
     }
 
     RealHeap *heap;
+    int distances = 0;
 
 # pragma omp parallel \
         private(i, heap) \
-        shared(sgtrain, sg, opf_PrecomputedDistance, opf_DistanceValue, opf_ArcWeight, tree, heap_costs) \
+        shared(sgtrain, sg, opf_PrecomputedDistance, opf_DistanceValue, opf_ArcWeight, tree, heap_costs, distances) \
         default(none)
     {
         heap = CreateRealHeap(tree->nnodes, heap_costs);
@@ -169,12 +170,15 @@ void opf_OPFClassifying(Subgraph *sgtrain, Subgraph *sg)
         for (i = 0; i < sg->nnodes; i++) {
             sg->node[i].pathval = INFINITY;
             int d = kOPFClassifyingHelper(sg, &sg->node[i], tree, heap);
+# pragma omp atomic
+            distances += d;
         }
         DestroyRealHeap(&heap);
     }
 
     free(heap_costs);
     DestroyOPFTree(&tree);
+    printf("Distance calculations: %.2f ", (float)distances / sg->nnodes);
 }
 
 // Semi-supervised learning function
