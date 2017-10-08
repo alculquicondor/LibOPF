@@ -150,21 +150,26 @@ void opf_OPFClassifying(Subgraph *sgtrain, Subgraph *sg)
     int i;
     OPFTree *tree = opf_IndexTrainedSubgraph(sgtrain);
     TNode **node_stack;
+    int distances = 0;
+
 # pragma omp parallel \
         private(i, node_stack) \
-        shared(sgtrain, sg, opf_PrecomputedDistance, opf_DistanceValue, opf_ArcWeight, tree) \
+        shared(sgtrain, sg, opf_PrecomputedDistance, opf_DistanceValue, opf_ArcWeight, tree, distances) \
         default(none)
     {
         node_stack = (TNode **)calloc(sizeof(TNode *), sg->nnodes);
 # pragma omp for
         for (i = 0; i < sg->nnodes; i++) {
             sg->node[i].pathval = INFINITY;
-            kOPFClassifyingHelper(sg, &sg->node[i], tree, node_stack);
+            int d = kOPFClassifyingHelper(sg, &sg->node[i], tree, node_stack);
+# pragma omp atomic
+            distances += d;
         }
         free(node_stack);
     }
 
     DestroyOPFTree(&tree);
+    printf("Distance calculations: %.2f ", (float)distances / sg->nnodes);
 }
 
 // Semi-supervised learning function
