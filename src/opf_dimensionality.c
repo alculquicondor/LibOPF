@@ -1,5 +1,6 @@
 #include "OPF.h"
-#include <stdio.h>
+
+#define HIST_COLS 100
 
 int main(int argc, char **argv){
     fflush(stdout);
@@ -37,6 +38,19 @@ int main(int argc, char **argv){
     fprintf(stdout, "Elements: %d\nMean: %.4Lf\nVariance: %.4Lf\nIntrinsic Dimensionality: %.4Lf\n",
             sg->nnodes, mean, variance, intrinsic_dimensionality);
     fprintf(stdout, "Min: %.2f, Max: %.2f\n", mini, maxi);
+    int histogram[HIST_COLS];
+    memset(histogram, 0, sizeof(histogram));
+    float delta = (maxi + 1e-2f - mini) / HIST_COLS;
+    for (i = 0; i < sg->nnodes; i++){
+        for (j = i + 1; j < sg->nnodes; j++){
+            float x = opf_EuclDist(sg->node[i].feat, sg->node[j].feat, sg->nfeats);
+            ++histogram[(int)((x - mini) / delta)];
+        }
+    }
+    fprintf(stdout, "Histogram\n");
+    for (i = 0; i < HIST_COLS; ++i) {
+        fprintf(stdout, "%.2f\t%.4f\n", mini + delta * i, histogram[i] * 100.0f / n);
+    }
     fflush(stdout);
 
     DestroySubgraph(&sg);
