@@ -1,6 +1,6 @@
 #include "OPF.h"
 
-#define HIST_COLS 100
+#define HIST_COLS 50
 
 int main(int argc, char **argv){
     fflush(stdout);
@@ -23,7 +23,7 @@ int main(int argc, char **argv){
     int n = 0;
     for (i = 0; i < sg->nnodes; i++){
         for (j = i + 1; j < sg->nnodes; j++){
-            float x = opf_EuclDist(sg->node[i].feat, sg->node[j].feat, sg->nfeats);
+            float x = opf_ArcWeight(sg->node[i].feat, sg->node[j].feat, sg->nfeats);
             mini = MIN(mini, x);
             maxi = MAX(maxi, x);
             long double delta = x - mean;
@@ -40,11 +40,13 @@ int main(int argc, char **argv){
     fprintf(stdout, "Min: %.2f, Max: %.2f\n", mini, maxi);
     int histogram[HIST_COLS];
     memset(histogram, 0, sizeof(histogram));
-    float delta = (maxi + 1e-2f - mini) / HIST_COLS;
+    float delta = (maxi - mini) / HIST_COLS;
     for (i = 0; i < sg->nnodes; i++){
         for (j = i + 1; j < sg->nnodes; j++){
-            float x = opf_EuclDist(sg->node[i].feat, sg->node[j].feat, sg->nfeats);
-            ++histogram[(int)((x - mini) / delta)];
+            float x = opf_ArcWeight(sg->node[i].feat, sg->node[j].feat, sg->nfeats);
+            int h = (int)((x - mini) / delta);
+            h = MIN(h, HIST_COLS - 1);
+            ++histogram[h];
         }
     }
     fprintf(stdout, "Histogram\n");

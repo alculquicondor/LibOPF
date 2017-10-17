@@ -11,7 +11,7 @@ FLAGS=  -O3 -Wall -fopenmp
 
 INCFLAGS = -I$(INCLUDE) -I$(INCLUDE)/$(UTIL)
 
-all: libOPF opf_split opf_accuracy opf_train opf_classify opf_learn opf_distance opf_info opf_dimensionality opf_fold opf_merge opf_cluster opf_knn_classify statistics txt2opf opf2txt opf_check opf_normalize
+all: libOPF opf_split opf_accuracy opf_train opf_classify opf_learn opf_distance opf_info opf_dimensionality opf_clean opf_fold opf_merge opf_cluster opf_knn_classify statistics txt2opf opf2txt opf_check opf_normalize
 
 libOPF: libOPF-build
 	echo "libOPF.a built..."
@@ -57,6 +57,9 @@ opf_info: libOPF
 
 opf_dimensionality: libOPF
 	$(CC) $(FLAGS) $(INCFLAGS) src/opf_dimensionality.c  -L./lib -o bin/opf_dimensionality -lOPF -lm
+
+opf_clean: libOPF
+	$(CC) $(FLAGS) $(INCFLAGS) src/opf_clean.c  -L./lib -o bin/opf_clean -lOPF -lm
 
 opf_fold: libOPF
 	$(CC) $(FLAGS) $(INCFLAGS) src/opf_fold.c  -L./lib -o bin/opf_fold -lOPF -lm
@@ -116,7 +119,7 @@ OPF-ift.o: $(SRC)/OPF.c
 ## Cleaning-up
 
 clean:
-	rm -f $(LIB)/lib*.a; rm -f $(OBJ)/*.o bin/opf_split bin/opf_accuracy bin/opf_train bin/opf_classify bin/opf_learn bin/opf_distance bin/opf_info bin/opf_dimensionality bin/opf_cluster bin/opf_fold bin/opf_merge tools/opf_check bin/opf_knn_classify tools/statistics tools/txt2opf tools/opf2txt tools/opf_check bin/opf_normalize
+	rm -f $(LIB)/lib*.a; rm -f $(OBJ)/*.o bin/opf_split bin/opf_accuracy bin/opf_train bin/opf_classify bin/opf_learn bin/opf_distance bin/opf_info bin/opf_dimensionality bin/opf_clean bin/opf_cluster bin/opf_fold bin/opf_merge tools/opf_check bin/opf_knn_classify tools/statistics tools/txt2opf tools/opf2txt tools/opf_check bin/opf_normalize
 
 clean_results:
 	rm -f *.out *.opf *.acc *.time *.opf training.dat evaluating.dat testing.dat
