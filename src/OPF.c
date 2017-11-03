@@ -128,11 +128,7 @@ int kOPFClassifyingHelper(Subgraph *sg, SNode *node, const OPFTree *tree, RealHe
         if (node->pathval <= tnode->sgnode->pathval)
             continue;
         calculations++;
-        float dcost;
-        if (!opf_PrecomputedDistance)
-            dcost = opf_ArcWeight(node->feat, tnode->sgnode->feat, sg->nfeats);
-        else
-            dcost = opf_DistanceValue[node->position][tnode->sgnode->position];
+        float dcost = opf_ArcWeight(node->feat, tnode->sgnode->feat, sg->nfeats);
         dcost = MAX(dcost, tnode->sgnode->pathval);
         if (dcost < node->pathval) {
             node->pathval = dcost;
@@ -1793,51 +1789,68 @@ int kOPFTreeCompare(const void *a, const void *b) {
 }
 
 
-void kIndexTrainedSubgraphHelper(const Subgraph *sg, TNode *nodes, int nnodes) {
-    TNode *curr_node = &nodes[0];
-    // Get delta dcost for remaining nodes
-    int i;
-    for (i = 1; i < nnodes; ++i) {
-        float dist;
-        if (!opf_PrecomputedDistance)
-            dist = opf_ArcWeight(curr_node->sgnode->feat, nodes[i].sgnode->feat, sg->nfeats);
-        else
-            dist = opf_DistanceValue[curr_node->sgnode->position][nodes[i].sgnode->position];
-        nodes[i].dcost = MAX(dist, nodes[i].sgnode->pathval);
+typedef struct {
+    TNode *nodes;
+    int nnodes;
+} OPFTreeTask;
+
+
+void kIndexTrainedSubgraphHelper(const Subgraph *sg, OPFTree *tree) {
+    OPFTreeTask *stack = (OPFTreeTask*)calloc(sg->nnodes, sizeof(OPFTreeTask));
+    int stack_size = 0;
+    stack[stack_size].nodes = tree->nodes;
+    stack[stack_size++].nnodes = sg->nnodes;
+    TNode *nodes;
+    int nnodes;
+    while (stack_size > 0) {
+        TNode *curr_node = nodes = &stack[--stack_size].nodes[0];
+        nnodes = stack[stack_size].nnodes;
+
+        // Get delta dcost for remaining nodes
+        int i;
+        for (i = 1; i < nnodes; ++i) {
+            float dist = opf_ArcWeight(curr_node->sgnode->feat, nodes[i].sgnode->feat, sg->nfeats);
+            nodes[i].dcost = MAX(dist, nodes[i].sgnode->pathval);
+        }
+
+        qsort((void *)(nodes + 1), nnodes - 1, sizeof(TNode), kOPFTreeCompare);
+        curr_node->dcost = nodes[1 + (nnodes - 2) / 2].dcost;  // Getting median cost.
+
+        TNode *best_node;
+
+        // Search parent node for left subtree.
+        best_node = &nodes[1];
+        int median_div;
+        for (median_div = 2; median_div < nnodes && nodes[median_div].dcost <= curr_node->dcost; ++median_div) {
+            if (nodes[median_div].sgnode->pathval < best_node->sgnode->pathval)
+                best_node = &nodes[median_div];
+        }
+        if (best_node != &nodes[1])
+            SwapTNode(&nodes[1], best_node);
+        if (median_div > 2) {
+            stack[stack_size].nodes = nodes + 1;
+            stack[stack_size++].nnodes = median_div - 1;
+        }
+        curr_node->lchild = &nodes[1];
+
+        if (median_div == nnodes)
+            continue;  // No remaining nodes for the right child.
+
+        // Search parent node for right subtree.
+        best_node = &nodes[median_div];
+        for (i = median_div + 1; i < nnodes; ++i) {
+            if (nodes[i].sgnode->pathval < best_node->sgnode->pathval)
+                best_node = &nodes[i];
+        }
+        if (best_node != &nodes[median_div])
+            SwapTNode(&nodes[median_div], best_node);
+        if (nnodes - median_div > 1) {
+            stack[stack_size].nodes = nodes + median_div;
+            stack[stack_size++].nnodes = nnodes - median_div;
+        }
+        curr_node->rchild = &nodes[median_div];
     }
-
-    qsort((void *)(nodes + 1), nnodes - 1, sizeof(TNode), kOPFTreeCompare);
-    curr_node->dcost = nodes[1 + (nnodes - 2) / 2].dcost;  // Getting median cost.
-
-    TNode *best_node;
-
-    // Search parent node for left subtree.
-    best_node = &nodes[1];
-    int median_div;
-    for (median_div = 2; median_div < nnodes && nodes[median_div].dcost <= curr_node->dcost; ++median_div) {
-        if (nodes[median_div].sgnode->pathval < best_node->sgnode->pathval)
-            best_node = &nodes[median_div];
-    }
-    if (best_node != &nodes[1])
-        SwapTNode(&nodes[1], best_node);
-    if (median_div > 2)
-        kIndexTrainedSubgraphHelper(sg, nodes + 1, median_div - 1);
-    curr_node->lchild = &nodes[1];
-
-    if (median_div == nnodes)
-        return;  // No remaining nodes for the right child.
-
-    // Search parent node for right subtree.
-    best_node = &nodes[median_div];
-    for (i = median_div + 1; i < nnodes; ++i) {
-        if (nodes[i].sgnode->pathval < best_node->sgnode->pathval)
-            best_node = &nodes[i];
-    }
-    if (best_node != &nodes[median_div])
-        SwapTNode(&nodes[median_div], best_node);
-    if (nnodes - median_div > 1)
-        kIndexTrainedSubgraphHelper(sg, nodes + median_div, nnodes - median_div);
-    curr_node->rchild = &nodes[median_div];
+    free(stack);
 }
 
 
@@ -1847,6 +1860,6 @@ OPFTree *opf_IndexTrainedSubgraph(const Subgraph *sgtrain) {
         tree->nodes[i].sgnode = &sgtrain->node[sgtrain->ordered_list_of_nodes[i]];
     }
     if (sgtrain->nnodes > 1)
-        kIndexTrainedSubgraphHelper(sgtrain, tree->nodes, sgtrain->nnodes);
+        kIndexTrainedSubgraphHelper(sgtrain, tree);
     return tree;
 }
